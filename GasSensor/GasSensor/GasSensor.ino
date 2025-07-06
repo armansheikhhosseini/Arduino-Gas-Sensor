@@ -1,249 +1,358 @@
 /*
+  Arduino Gas Sensor Security System
+  
+  This project implements a comprehensive gas detection and security system using:
+  - MQ-2 Gas Sensor for detecting LPG, propane, methane, alcohol, hydrogen, and smoke
+  - 4x4 Matrix Keypad for password authentication
+  - 16x2 LCD Display for user interface and sensor readings
+  - LED and Buzzer for visual and audio alerts
+  
+  Circuit Connections:
+  ==================
+  
+  LCD Display (16x2):
+  * RS pin → Analog pin A0
+  * Enable pin → Analog pin A1
+  * D4 pin → Analog pin A2
+  * D5 pin → Analog pin A3
+  * D6 pin → Analog pin A4
+  * D7 pin → Analog pin A5
+  * VSS → GND, VDD → 5V, V0 → Potentiometer for contrast
+  
+  4x4 Matrix Keypad:
+  * ROW1 → Digital pin 9
+  * ROW2 → Digital pin 8
+  * ROW3 → Digital pin 7
+  * ROW4 → Digital pin 6
+  * COL1 → Digital pin 5
+  * COL2 → Digital pin 4
+  * COL3 → Digital pin 3
+  * COL4 → Digital pin 2
+  
+  MQ-2 Gas Sensor:
+  * VCC → 5V
+  * GND → GND
+  * A0 → Analog pin A5
+  
+  Alert System:
+  * Red LED → Digital pin 12 (with 220Ω resistor)
+  * Buzzer → Digital pin 13
+  
+  Author: Arman Sheikhhosseini
+  Email: arman.sheikhhosseini@gmail.com
+  Date: May 2017 (Updated: July 2025)
+  Version: V2.0
+  License: MIT
+*/
 
-   Demonstrates the use a 16x2 LCD display and
-  4x4 LCD display.  T
+// ======================== LIBRARY INCLUDES ========================
+#include <LiquidCrystal.h>
+#include <Keypad.h>
 
-   The  Arduino circuit connection for LCD:
+// ======================== PIN DEFINITIONS ========================
+// LCD Pins
+const int LCD_RS = 10;
+const int LCD_ENABLE = A0;
+const int LCD_D4 = A1;
+const int LCD_D5 = A2;
+const int LCD_D6 = A3;
+const int LCD_D7 = A4;
 
-   * LCD RS  pin to analog pin A0
+// Alert System Pins
+const int RED_LED_PIN = 12;
+const int BUZZER_PIN = 13;
+const int GAS_SENSOR_PIN = A5;
 
-   * LCD  Enable pin to analog pin A1
+// Keypad Pins
+const byte KEYPAD_ROWS = 4;
+const byte KEYPAD_COLS = 4;
+byte rowPins[KEYPAD_ROWS] = {9, 8, 7, 6};
+byte colPins[KEYPAD_COLS] = {5, 4, 3, 2};
 
-   * LCD D4  pin to analog pin A2
+// ======================== CONFIGURATION CONSTANTS ========================
+const int PASSWORD_LENGTH = 5;  // 4 digits + null terminator
+const int GAS_THRESHOLD = 500;   // Adjustable gas detection threshold
+const int LOGIN_SUCCESS_TONE = 4000;
+const int LOGIN_SUCCESS_DURATION = 1000;
+const int GAS_ALARM_TONE = 700;
+const int GAS_ALARM_DURATION = 50;
+const int WRONG_PASSWORD_TONE = 500;
+const int WRONG_PASSWORD_DURATION = 500;
 
-   * LCD D5  pin to analog pin A3
+// ======================== GLOBAL VARIABLES ========================
+// LCD and Keypad objects
+LiquidCrystal lcd(LCD_RS, LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 
-   * LCD D6  pin to analog pin A4
+// Keypad configuration
+char keypadLayout[KEYPAD_ROWS][KEYPAD_COLS] = {
+  {'1', '2', '3', 'F'},
+  {'4', '5', '6', 'F'},
+  {'7', '8', '9', 'F'},
+  {'#', '0', '=', 'F'}
+};
+Keypad keypad = Keypad(makeKeymap(keypadLayout), rowPins, colPins, KEYPAD_ROWS, KEYPAD_COLS);
 
-   * LCD D7  pin to analog pin A5
+// Password system variables
+char enteredPassword[PASSWORD_LENGTH];
+const char masterPassword[PASSWORD_LENGTH] = "1373";  // Default password
+byte passwordIndex = 0;
+bool isPasswordMode = true;
+bool isSystemLocked = false;
 
-   The  Arduino circuit connection for MAtrix Key Pad:
+// System state variables
+unsigned long lastSensorRead = 0;
+const unsigned long SENSOR_READ_INTERVAL = 100;  // Read sensor every 100ms
+unsigned long lastDisplayUpdate = 0;
+const unsigned long DISPLAY_UPDATE_INTERVAL = 500;  // Update display every 500ms
 
-   * ROW1 pin  to digital pin 9
-
-   * ROW2 pin  to digital pin 8
-
-   * ROW3 pin  to digital pin 7
-
-   * ROW4 pin  to digital pin 6
-
-   * COLUMN1  pin to digital pin 5
-
-   * COLUMN2  pin to digital pin 4
-
-   * COLUMN3  pin to digital pin 3
-
-   * COLUMN4  pin to digital pin 2
-
-   Name:-  Arman Sheikh Hosseini
-
-   Date:-   may2017
-
-   Version:-  V0.1
-
-   e-mail:-  arman.sheikhhosseini@gmail.com
-
-   */
-
-  // include the library code:
-
- #include <LiquidCrystal.h>
- 
- #include <Keypad.h>
-
-  LiquidCrystal lcd(10,A0,A1,A2,A3,A4);
-
-  //4x4 Matrix key pad
-
-  const byte ROWS = 4; // Four rows
-
-  const byte COLS = 4; // Four columns
-
-  // Define the Keymap
-
-  char keys[ROWS][COLS] = 
-
-  {
-
-   
-  {'1','2','3','F'},
-
-   
-  {'4','5','6','F'},
-
-   
-  {'7','8','9','F'},
-
-   
-  {'#','0','=','F'}
-
-  };
-
-  // Connect keypad ROW0, ROW1, ROW2 and ROW3 to  Arduino pins.
-
-  byte rowPins[ROWS] = { 9, 8, 7, 6 };
-
-  // Connect keypad COL0, COL1, COL2 and COL3 to  Arduino pins.
-
-  byte colPins[COLS] = { 5, 4, 3, 2 }; 
-
-  // Create the Keypad
-  Keypad kpd = Keypad( makeKeymap(keys), rowPins,
-  colPins, ROWS, COLS );
-
-
-//password configuration
-
-#define Password_Lenght 5 // Give enough room for six chars + NULL char
- 
-char Data[Password_Lenght]; // 6 is the number of chars it can hold + the null char = 7
-char Master[Password_Lenght] = "1373"; 
-byte data_count = 0,newCodeCount=0;
-bool Pass_is_good;
-char customKey;
-
-bool PasswordMode ;
-
-
-
-/////////////////////////
-
-
-
-int redLed = 12;
-int buzzer = 13;
-int smokeA0 = A5;
-// Your threshold value
-int sensorThres = 500;
-
-
-
-
- ///////////////////////
-
-  void setup() 
-
-  {
-PasswordMode=true;
-
-     
-
-    // set up the LCD's number of columns and rows:
-
-   
-  lcd.begin(16, 2);
-
-    // Print  a message to the LCD.
-
-   
-//////////////////
-  pinMode(redLed, OUTPUT);
-  pinMode(buzzer, OUTPUT);
-  pinMode(smokeA0, INPUT);
+// ======================== SETUP FUNCTION ========================
+void setup() {
+  // Initialize serial communication for debugging
   Serial.begin(9600);
-
-///////
-  }
-
-  void loop()
-{
-  if(PasswordMode==true){
-   getPassword();
-  }
-
-  if(PasswordMode==false){
-    getSensor();
+  Serial.println(F("=== Arduino Gas Sensor Security System ==="));
+  Serial.println(F("Initializing system..."));
   
-    lcd.setCursor(0, 0);
-       lcd.print("sensor Thresh:");
-        lcd.setCursor(0, 1);
-        
-       
-          lcd.print(getSensor());
-     
-        delay(100);
+  // Initialize LCD
+  lcd.begin(16, 2);
+  lcd.clear();
+  
+  // Configure pin modes
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(GAS_SENSOR_PIN, INPUT);
+  
+  // Initialize system state
+  digitalWrite(RED_LED_PIN, LOW);
+  isPasswordMode = true;
+  passwordIndex = 0;
+  
+  // Display welcome message
+  displayWelcomeMessage();
+  
+  Serial.println(F("System initialized successfully!"));
+  Serial.println(F("Default password: 1373"));
+}
 
+// ======================== MAIN LOOP ========================
+void loop() {
+  if (isPasswordMode) {
+    handlePasswordInput();
+  } else {
+    handleGasMonitoring();
   }
 }
 
-
-int getSensor(){
-  int analogSensor = analogRead(smokeA0);
-
-  Serial.print("Pin A0: ");
-  Serial.println(analogSensor);
-  // Checks if it has reached the threshold value
-  if (analogSensor > sensorThres)
-  {
-    digitalWrite(redLed, HIGH);
-    tone(buzzer, 700, 50);
-
+// ======================== PASSWORD FUNCTIONS ========================
+void handlePasswordInput() {
+  char key = keypad.getKey();
+  
+  if (key && isPasswordMode) {
+    if (key == '#') {
+      // Reset password entry
+      clearPasswordData();
+      displayPasswordPrompt();
+      Serial.println(F("Password entry reset"));
+    } 
+    else if (key == '=' && passwordIndex > 0) {
+      // Backspace functionality
+      passwordIndex--;
+      enteredPassword[passwordIndex] = '\0';
+      updatePasswordDisplay();
+      Serial.println(F("Character deleted"));
+    }
+    else if (isdigit(key) && passwordIndex < (PASSWORD_LENGTH - 1)) {
+      // Add digit to password
+      enteredPassword[passwordIndex] = key;
+      passwordIndex++;
+      updatePasswordDisplay();
+      Serial.print(F("Key pressed: "));
+      Serial.println(key);
+      
+      // Check if password is complete
+      if (passwordIndex == (PASSWORD_LENGTH - 1)) {
+        enteredPassword[passwordIndex] = '\0';  // Null terminate
+        validatePassword();
+      }
+    }
   }
-  else
-  {
-    digitalWrite(redLed, LOW);
-    noTone(buzzer);
-  }
-  return analogSensor;
-  delay(100);
 }
 
-
-void getPassword(){
-
-
+void validatePassword() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("Checking..."));
   
-   lcd.setCursor(0,0);
-  lcd.print("Enter Password:");
+  delay(500);  // Brief delay for user feedback
   
-
-
-
-  customKey = kpd.getKey();
-
+  lcd.clear();
+  lcd.setCursor(0, 0);
   
-  
-  if (customKey && PasswordMode==true ) // makes sure a key is actually pressed, equal to (customKey != NO_KEY)
-  {
-    Data[data_count] = customKey; // store char into data array
-    lcd.setCursor(data_count,1); // move cursor to show each new char
-    lcd.print(Data[data_count]); // print char at said cursor
-    data_count++; // increment data array by 1 to store new char, also keep track of the number of chars entered
-  }
-
-  if(data_count == Password_Lenght-1 && PasswordMode==true) // if the array index is equal to the number of expected chars, compare data to master
-  {
-     
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Password is ");
-
-    if(!strcmp(Data, Master)){ // equal to (strcmp(Data, Master) == 0)
-       tone(buzzer, 4000, 1000);
-      lcd.print("Good");
-
-       lcd.setCursor(0, 1);
-       lcd.print("Loging in");
-      PasswordMode=false;
+  if (strcmp(enteredPassword, masterPassword) == 0) {
+    // Password correct
+    lcd.print(F("Access Granted!"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Welcome User"));
     
-    }
-    else{
-      lcd.print("Bad");
-      tone(buzzer, 500, 500);
-    }
-    delay(1000);// added 1 second delay to make sure the password is completely shown on screen before it gets cleared.
+    tone(BUZZER_PIN, LOGIN_SUCCESS_TONE, LOGIN_SUCCESS_DURATION);
+    
+    isPasswordMode = false;
+    Serial.println(F("LOGIN SUCCESS: Access granted"));
+    
+    delay(2000);
     lcd.clear();
-    clearData();  
-   
+    displayGasMonitoringUI();
+  } else {
+    // Password incorrect
+    lcd.print(F("Access Denied!"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Try Again"));
+    
+    tone(BUZZER_PIN, WRONG_PASSWORD_TONE, WRONG_PASSWORD_DURATION);
+    
+    Serial.println(F("LOGIN FAILED: Incorrect password"));
+    
+    delay(2000);
+    clearPasswordData();
+    displayPasswordPrompt();
   }
 }
 
-void clearData()
-{
-  while(data_count !=0)
-  {   // This can be used for any array size, 
-    Data[data_count--] = 0; //clear array for new data
+void clearPasswordData() {
+  passwordIndex = 0;
+  for (int i = 0; i < PASSWORD_LENGTH; i++) {
+    enteredPassword[i] = '\0';
   }
-  return;
+}
+
+void displayWelcomeMessage() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("Gas Security Sys"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("Initializing..."));
+  delay(2000);
+  
+  displayPasswordPrompt();
+}
+
+void displayPasswordPrompt() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("Enter Password:"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("____"));
+  Serial.println(F("Waiting for password input..."));
+}
+
+void updatePasswordDisplay() {
+  lcd.setCursor(0, 1);
+  
+  // Display asterisks for entered digits
+  for (int i = 0; i < 4; i++) {
+    if (i < passwordIndex) {
+      lcd.print(F("*"));
+    } else {
+      lcd.print(F("_"));
+    }
+  }
+}
+
+// ======================== GAS MONITORING FUNCTIONS ========================
+void handleGasMonitoring() {
+  unsigned long currentTime = millis();
+  
+  // Read sensor at regular intervals
+  if (currentTime - lastSensorRead >= SENSOR_READ_INTERVAL) {
+    int gasLevel = readGasSensor();
+    checkGasAlert(gasLevel);
+    lastSensorRead = currentTime;
+  }
+  
+  // Update display at regular intervals
+  if (currentTime - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
+    updateGasDisplay();
+    lastDisplayUpdate = currentTime;
+  }
+  
+  // Check for system lock command (press # to return to password mode)
+  char key = keypad.getKey();
+  if (key == '#') {
+    lockSystem();
+  }
+}
+
+int readGasSensor() {
+  int rawValue = analogRead(GAS_SENSOR_PIN);
+  
+  // Print sensor data to serial for debugging
+  Serial.print(F("Gas Sensor Raw Value: "));
+  Serial.print(rawValue);
+  Serial.print(F(" | Threshold: "));
+  Serial.print(GAS_THRESHOLD);
+  Serial.print(F(" | Status: "));
+  Serial.println(rawValue > GAS_THRESHOLD ? F("ALERT") : F("SAFE"));
+  
+  return rawValue;
+}
+
+void checkGasAlert(int gasLevel) {
+  if (gasLevel > GAS_THRESHOLD) {
+    // Gas detected - activate alerts
+    digitalWrite(RED_LED_PIN, HIGH);
+    tone(BUZZER_PIN, GAS_ALARM_TONE, GAS_ALARM_DURATION);
+  } else {
+    // No gas detected - deactivate alerts
+    digitalWrite(RED_LED_PIN, LOW);
+    noTone(BUZZER_PIN);
+  }
+}
+
+void updateGasDisplay() {
+  int gasLevel = analogRead(GAS_SENSOR_PIN);
+  
+  lcd.setCursor(0, 0);
+  lcd.print(F("Gas Level:      "));
+  lcd.setCursor(0, 1);
+  
+  // Display gas level with status
+  if (gasLevel > GAS_THRESHOLD) {
+    lcd.print(F("ALERT! "));
+    lcd.print(gasLevel);
+    lcd.print(F("   "));
+  } else {
+    lcd.print(F("SAFE  "));
+    lcd.print(gasLevel);
+    lcd.print(F("   "));
+  }
+}
+
+void displayGasMonitoringUI() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("Monitoring Gas"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("Press # to lock"));
+  delay(2000);
+}
+
+void lockSystem() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("System Locked"));
+  lcd.setCursor(0, 1);
+  lcd.print(F("Goodbye!"));
+  
+  // Turn off all alerts
+  digitalWrite(RED_LED_PIN, LOW);
+  noTone(BUZZER_PIN);
+  
+  Serial.println(F("SYSTEM LOCKED: Returning to password mode"));
+  
+  delay(2000);
+  
+  // Reset to password mode
+  isPasswordMode = true;
+  clearPasswordData();
+  displayPasswordPrompt();
 }
 
